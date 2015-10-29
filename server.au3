@@ -22,11 +22,16 @@ $cfg_log = @ScriptDir & "\" & $name & ".log"
 $log_fle = FileOpen( $cfg_log, 1)
 FileWrite($log_fle, @CRLF & $CRDATE & ': Конфигуратор запущен...' & @CRLF)
 ;создаем меню
-$setoptions = TrayCreateItem("Настройки")
-              TrayCreateItem("")
+$tools_menu	= TrayCreateMenu("Инструменты")
+$tools_ide	= TrayCreateItem("NetBeans",  $tools_menu)
+$tools_hdi  = TrayCreateItem("Heidi SQL", $tools_menu)
+$tools_term = TrayCreateItem("Терминал",  $tools_menu)
+              TrayCreateItem("")		 
 $reboot     = TrayCreateItem("Перезапуск")
-              TrayCreateItem("")
-$term       = TrayCreateItem("Терминал")
+$halt       = TrayCreateItem("Остановить")
+$run        = TrayCreateItem("Запустить")
+              TrayCreateItem("")		 
+$setoptions = TrayCreateItem("Настройки")
               TrayCreateItem("")
 $ftp_menu   = TrayCreateMenu("FTP-сервер")
 $ftp_start  = TrayCreateItem("Старт",   $ftp_menu)
@@ -35,6 +40,10 @@ $ftp_stop   = TrayCreateItem("Стоп",    $ftp_menu)
               TrayCreateItem("")
 $exititem   = TrayCreateItem("Выход")
 ;настраиваем подменю ftp-сервера
+TrayItemSetState($reboot, $TRAY_ENABLE)
+TrayItemSetState($halt,   $TRAY_ENABLE)
+TrayItemSetState($run,    $TRAY_DISABLE)
+;настраиваем меню управления сервером
 TrayItemSetState($ftp_start, $TRAY_ENABLE)
 TrayItemSetState($ftp_stop,  $TRAY_DISABLE)
 TrayItemSetState($ftp_reset, $TRAY_DISABLE)
@@ -44,7 +53,11 @@ TrayItemSetOnEvent($ftp_reset,  "reset_ftp_server")
 TrayItemSetOnEvent($ftp_stop,   "stop_ftp_server")
 TrayItemSetOnEvent($setoptions, "t_Options")
 TrayItemSetOnEvent($reboot,     "t_Reboot")
-TrayItemSetOnEvent($term,       "t_Run")
+TrayItemSetOnEvent($run,        "t_Run")
+TrayItemSetOnEvent($halt,       "t_Halt")
+TrayItemSetOnEvent($tools_term, "t_CMD")
+TrayItemSetOnEvent($tools_ide,  "t_Run_IDE")
+TrayItemSetOnEvent($tools_hdi,  "t_Run_Heidi")
 TrayItemSetOnEvent($exititem,   "t_Quit")
 OnAutoItExitRegister('_Quit')
 ;инициализируем переменные для работы программы
@@ -56,13 +69,19 @@ $f_php      = False
 $f_ngx      = False
 $f_sql      = False
 $f_ico      = False
+$f_state    = True ;автоматически запускаем серверы
+$f_state_t  = 0
 $sync_delay = 0
 $opt_sync   = 0
 $rbt_sync   = 0
+$run_sync   = 0
+$hlt_sync   = 0
 $qut_sync   = 0
+$ide_sync   = 0
+$hdi_sync   = 0
 $cmd_sync   = 0
 $root_dir   = ""
-$ftp_state = 0
+$ftp_state  = 0
 ;читаем конфиг
 $path_dir = IniRead($cfg_ini, "GENERAL", "dir", @ScriptDir)
 $path_php = IniRead($cfg_ini, "GENERAL", "php", $path_dir   & "php\")
@@ -70,7 +89,11 @@ $path_git = IniRead($cfg_ini, "GENERAL", "git", $path_dir   & "git\bin\")
 $path_sql = IniRead($cfg_ini, "GENERAL", "sql", $path_dir   & "mysql\bin\")
 $path_ngx = IniRead($cfg_ini, "GENERAL", "ngx", $path_dir   & "nginx\")
 $path_cli = IniRead($cfg_ini, "GENERAL", "cli", $path_dir   & "conemu\")
+$path_rub = IniRead($cfg_ini, "GENERAL", "rub", $path_dir   & "ruby\bin\")
 $path_ftp = IniRead($cfg_ini, "GENERAL", "ftp", $path_dir   & "slimftpd\")
+$path_ide = IniRead($cfg_ini, "GENERAL", "ide", $path_dir   & "netbeans\")
+$path_hdi = IniRead($cfg_ini, "GENERAL", "hdi", $path_dir   & "heidisql\")
+$path_htm = IniRead($cfg_ini, "GENERAL", "htm", $path_dir   & "public_html\")
 $path_hst = IniRead($cfg_ini, "GENERAL", "hst", @windowsdir & "\system32\drivers\etc\hosts")
 
 ;
@@ -83,9 +106,12 @@ EnvSet("ROOT_SQL", $path_sql)
 EnvSet("ROOT_GIT", $path_git)
 EnvSet("ROOT_NGX", $path_ngx)
 EnvSet("ROOT_FTP", $path_ftp)
+EnvSet("ROOT_RUB", $path_rub)
+EnvSet("ROOT_IDE", $path_ide)
+EnvSet("ROOT_HDI", $path_hdi)
 ;добовляем все пути к программам в переменную %PATH%
 ;EnvSet("PATH", $path_cli & ";" & $path_php & ";" & $path_ngx & ";" & $path_sql & ";" & $path_ftp & ";" & EnvGet("PATH"))
-EnvSet("path", EnvGet("path") & ";" & $path_cli & ";" & $path_php & ";" & $path_ngx & ";" & $path_sql & ";" & $path_ftp & ";" & $path_git)
+EnvSet("path", EnvGet("path") & ";" & $path_cli & ";" & $path_php & ";" & $path_ngx & ";" & $path_sql & ";" & $path_ftp & ";" & $path_git & ";" & $path_rub & ";" & $path_ide & ";" & $path_hdi)
 EnvUpdate()
 
 ;уст. нач. состояние
@@ -97,14 +123,26 @@ EndFunc
 Func t_Options()
     $opt_sync = 1
 EndFunc
+Func t_Halt()
+    $hlt_sync = 1
+EndFunc
+Func t_Run()
+    $run_sync = 1
+EndFunc
 Func t_Reboot()
     $rbt_sync = 1
 EndFunc
 Func t_Quit()
     $qut_sync = 1
 EndFunc
-Func t_Run()
+Func t_CMD()
     $cmd_sync = 1
+EndFunc
+Func t_Run_IDE()
+    $ide_sync = 1
+EndFunc
+Func t_Run_Heidi()
+    $hdi_sync = 1
 EndFunc
 
 ;запуск SQL-сервера
@@ -141,7 +179,7 @@ Func stop_sql_server()
 	Next
 	;проверка результата работы цикла завершающего все предыдущие процессы
 	If ProcessExists ($exe_sql) Then
-		FileWrite($log_fle, $CRDATE & ': SQL-сервер остановить не удалось!' & @CRLF)
+		FileWrite($log_fle, $CRDATE & ': SQL-сервер ожидает завершения...' & @CRLF)
 	Else
 		FileWrite($log_fle, $CRDATE & ': SQL-сервер остановлен' & @CRLF)
 	EndIf
@@ -181,7 +219,7 @@ Func stop_nginx_server()
 	Next
 	;проверка результата работы цикла завершающего все предыдущие процессы
 	If ProcessExists ($exe_ngx) Then
-		FileWrite($log_fle, $CRDATE & ': Сервер NGINX остановить не удалось!' & @CRLF)
+		FileWrite($log_fle, $CRDATE & ': Сервер NGINX ожидает завершения...' & @CRLF)
 	Else
 		FileWrite($log_fle, $CRDATE & ': Сервер NGINX остановлен' & @CRLF)
 	EndIf
@@ -221,14 +259,14 @@ Func stop_php_server()
 	Next
 	;проверка результата работы цикла завершающего все предыдущие процессы
 	If ProcessExists ($exe_php) Then
-		FileWrite($log_fle, $CRDATE & ': Сервер PHP остановить не удалось!' & @CRLF)
+		FileWrite($log_fle, $CRDATE & ': Сервер PHP ожидает завершения...' & @CRLF)
 	Else
 		FileWrite($log_fle, $CRDATE & ': Сервер PHP остановлен' & @CRLF)
 	EndIf
 EndFunc
 
 ; запускаем терминал
-Func _Run()
+Func _CMD()
 	If @OSArch = 'X86' Then
 	    Run("ConEmu.exe", $path_dir, @SW_SHOW)
 	Else
@@ -315,19 +353,43 @@ Func reset_ftp_server()
 EndFunc
 
 Func _Options()
-	Msgbox(64,"Preferences:","OS:" & @OSVersion)
+	Msgbox(64,"Preferences:", "OS:" & @OSVersion & "\npath: " & EnvGet("path"))
+EndFunc
+
+Func _Run_IDE()
+	Run("NetBeansPortable.exe", "", @SW_SHOW)
+EndFunc
+
+Func _Run_Heidi()
+	Run("heidisql.exe", "", @SW_SHOW)
 EndFunc
 
 Func _Reboot()
+    ;status_ico_stop()
+    ;stop_php_server()
+	;stop_sql_server()
+	;stop_nginx_server()
+	;reset_ftp_server()
+	_Halt()
+	update_hosts($path_hst)
+	_Run()
+	;start_php_server()
+	;start_sql_server()
+	;start_nginx_server()
+EndFunc
+
+;запуск серверов
+Func _Run()
+    $f_state = True 
+	$sync_delay = 0
+EndFunc
+
+Func _Halt()
+    $f_state = False ;отключаем автозапуск серверов
     status_ico_stop()
     stop_php_server()
 	stop_sql_server()
 	stop_nginx_server()
-	;reset_ftp_server()
-	update_hosts($path_hst)
-	start_php_server()
-	start_sql_server()
-	start_nginx_server()
 EndFunc
 
 ;завершение работы...
@@ -371,10 +433,11 @@ While 1
 			$f_ico = False
 		EndIf
 	EndIf
+	
 	;отслеживаем работу серверов и в случае падения перезапускаем
 	If $sync_delay > 0 Then
 		$sync_delay = $sync_delay - 1
-	Else
+	ElseIf $f_state Then
 		If Not $f_php Then
 			FileWrite($log_fle, $CRDATE & ': Процесс PHP-сервера не обнаружен!' & @CRLF)
 			start_php_server()
@@ -389,19 +452,46 @@ While 1
 		EndIf
 		$sync_delay = 100
 	EndIf
+	
+	;обновляем состояние меню управления сервером
+	if Not $f_state = $f_state_t Then 
+		If $f_state Then
+			TrayItemSetState($reboot, $TRAY_ENABLE)
+			TrayItemSetState($halt,   $TRAY_ENABLE)
+			TrayItemSetState($run,    $TRAY_DISABLE)
+		Else
+			TrayItemSetState($reboot, $TRAY_DISABLE)
+			TrayItemSetState($halt,   $TRAY_DISABLE)
+			TrayItemSetState($run,    $TRAY_ENABLE)		
+		EndIf
+		$f_state_t = $f_state 
+	EndIf
+	
 	; синхронизируем работу цикла и обработчики событий
 	If   $qut_sync = 1   Then
 	    _Quit()
 	    $qut_sync = 0
+	ElseIf $hlt_sync = 1 Then
+	    _Halt()
+	    $hlt_sync = 0
 	ElseIf $rbt_sync = 1 Then
 	    _Reboot()
 	    $rbt_sync = 0
+	ElseIf $run_sync = 1 Then
+	    _Run()
+	    $run_sync = 0
 	ElseIf $opt_sync = 1 Then
 	    _Options()
 	    $opt_sync = 0
 	ElseIf $cmd_sync = 1 Then
-	    _Run()
+	    _CMD()
 	    $cmd_sync = 0	
+	ElseIf $ide_sync = 1 Then		
+		_Run_IDE()
+		$ide_sync = 0
+	ElseIf $hdi_sync = 1 Then		
+		_Run_Heidi()
+		$hdi_sync = 0
 	EndIf
 	Sleep(100)
 WEnd

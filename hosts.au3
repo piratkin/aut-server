@@ -54,7 +54,7 @@ Func update_hosts($path, $server_ip = "127.0.0.1")
 	_ArraySort($arr_rm, 1, 0, (Ubound($arr_rm) - 1))
 	
 	;получаем список диррикторий
-	$rec_dirs = _FileListToArray("c:\admin\public_html\", "*", 2)
+	$rec_dirs = _FileListToArray($path_htm, "*", 2)
 	If Not @error Then
 	    ReDim $arr_ds[$rec_dirs[0]]
 		;MsgBox(4096, "test.", $rec_dirs[0])
