@@ -61,6 +61,7 @@ TrayItemSetOnEvent($tools_hdi,  "t_Run_Heidi")
 TrayItemSetOnEvent($exititem,   "t_Quit")
 OnAutoItExitRegister('_Quit')
 ;инициализируем переменные для работы программы
+$MAX_RETRY  = 2048
 $exe_php    = "php-cgi.exe"
 $exe_sql    = "mysqld.exe"
 $exe_ngx    = "nginx.exe"
@@ -167,11 +168,12 @@ EndFunc
 
 ;закрываем SQL-сервера
 Func stop_sql_server()
-	For $ps_cnt = 0 To 100
+	For $ps_cnt = 0 To $MAX_RETRY
 		$ps_pid = ProcessExists($exe_sql)
 		If $ps_pid Then
 			If ProcessClose($ps_pid) Then
-			    FileWrite($log_fle, $CRDATE & ': Завершен (MySQL) процес с PID = ' & $ps_pid & @CRLF)
+			    ProcessWaitClose($ps_pid, 9)
+				FileWrite($log_fle, $CRDATE & ': Завершен (MySQL) процес с PID = ' & $ps_pid & @CRLF)
 			EndIf
 		Else
 			ExitLoop
@@ -207,11 +209,12 @@ EndFunc
 
 ;закрываем сервер NGINX
 Func stop_nginx_server()
-	For $ps_cnt = 0 To 100
+	For $ps_cnt = 0 To $MAX_RETRY
 		$ps_pid = ProcessExists($exe_ngx)
 		If $ps_pid Then
 			If ProcessClose($ps_pid) Then
-			    FileWrite($log_fle, $CRDATE & ': Завершен (NGINX) процес с PID = ' & $ps_pid & @CRLF)
+			    ProcessWaitClose($ps_pid, 9)
+				FileWrite($log_fle, $CRDATE & ': Завершен (NGINX) процес с PID = ' & $ps_pid & @CRLF)
 			EndIf
 		Else
 			ExitLoop
@@ -247,11 +250,12 @@ EndFunc
 ;закрываем PHP-сервер
 Func stop_php_server()
     ;закрываем PHP-сервер
-	For $ps_cnt = 0 To 100
+	For $ps_cnt = 0 To $MAX_RETRY
 		$ps_pid = ProcessExists($exe_php)
 		If $ps_pid Then
 			If ProcessClose($ps_pid) Then
-			    FileWrite($log_fle, $CRDATE & ': Завершен (PHP) процес с PID = ' & $ps_pid & @CRLF)
+			    ProcessWaitClose($ps_pid, 9)
+				FileWrite($log_fle, $CRDATE & ': Завершен (PHP) процес с PID = ' & $ps_pid & @CRLF)
 			EndIf
 		Else
 			ExitLoop
@@ -327,10 +331,11 @@ EndFunc
 Func stop_ftp_server()
     off_ftp_state()
 	;закрываем PHP-сервер
-	For $ps_cnt = 0 To 100
+	For $ps_cnt = 0 To $MAX_RETRY
 		$ps_pid = ProcessExists($exe_ftp)
 		If $ps_pid Then
 			If ProcessClose($ps_pid) Then
+			    ProcessWaitClose($ps_pid, 9)
 			    FileWrite($log_fle, $CRDATE & ': Завершен (FTP) процес с PID = ' & $ps_pid & @CRLF)
 			EndIf
 		Else
